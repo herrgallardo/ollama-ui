@@ -1,15 +1,6 @@
 import { NextRequest } from "next/server"
-
-interface StreamResponse {
-  content: string
-  stats?: {
-    eval_count?: number
-    eval_duration?: number
-    prompt_eval_count?: number
-    prompt_eval_duration?: number
-    total_duration?: number
-  }
-}
+import type { StreamResponse } from "@/app/types/chat"
+import { OLLAMA_API_BASE } from "@/app/constants/prompts"
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +15,7 @@ export async function POST(request: NextRequest) {
       ? [{ role: "system", content: systemPrompt }, ...messages]
       : messages
 
-    const response = await fetch("http://localhost:11434/api/chat", {
+    const response = await fetch(`${OLLAMA_API_BASE}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

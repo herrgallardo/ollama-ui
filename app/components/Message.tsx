@@ -6,25 +6,12 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import type { Components } from "react-markdown"
 import type { CSSProperties } from "react"
-
-interface MessageProps {
-  role: "user" | "assistant" | "system"
-  content: string
-  model?: string
-  stats?: {
-    tokensPerSecond?: number
-    promptTokensPerSecond?: number
-    totalTokens?: number
-    promptTokens?: number
-    generationTime?: number
-    totalTime?: number
-  }
-}
+import type { ChatMessage } from "@/app/types/chat"
 
 // Type assertion for the style to match SyntaxHighlighter's expected type
 const syntaxStyle = vscDarkPlus as { [key: string]: CSSProperties }
 
-export default function Message({ role, content, model, stats }: MessageProps) {
+export default function Message({ role, content, model, stats }: ChatMessage) {
   const components: Components = {
     code({ node, className, children, ...props }) {
       const inline = node?.position
