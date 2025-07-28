@@ -7,6 +7,14 @@ import Message from "./components/Message"
 interface ChatMessage {
   role: "user" | "assistant" | "system"
   content: string
+  stats?: {
+    tokensPerSecond?: number
+    promptTokensPerSecond?: number
+    totalTokens?: number
+    promptTokens?: number
+    generationTime?: number
+    totalTime?: number
+  }
 }
 
 interface Model {
@@ -34,6 +42,7 @@ export default function Home() {
   const [systemPrompt, setSystemPrompt] = useState("default")
   const [isConnected, setIsConnected] = useState(true)
   const [streamingContent, setStreamingContent] = useState("")
+  const [currentStats, setCurrentStats] = useState<ChatMessage["stats"]>()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -80,7 +89,9 @@ export default function Home() {
     setInput("")
     setLoading(true)
     setStreamingContent("")
+    setCurrentStats(undefined)
     abortControllerRef.current = new AbortController()
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -93,18 +104,68 @@ export default function Home() {
         }),
         signal: abortControllerRef.current.signal,
       })
+
       if (!res.ok) throw new Error("Failed to get response")
+
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       let content = ""
+      let stats: ChatMessage["stats"] = {}
+
       while (true) {
         const { done, value } = await reader!.read()
         if (done) break
-        content += decoder.decode(value)
-        setStreamingContent(content)
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split("\n").filter((line) => line.trim())
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line)
+
+            if (data.content) {
+              content += data.content
+              setStreamingContent(content)
+            }
+
+            if (data.stats) {
+              // Calculate tokens per second
+              const tokensPerSecond = data.stats.eval_duration
+                ? data.stats.eval_count / (data.stats.eval_duration / 1e9)
+                : undefined
+
+              const promptTokensPerSecond = data.stats.prompt_eval_duration
+                ? data.stats.prompt_eval_count /
+                  (data.stats.prompt_eval_duration / 1e9)
+                : undefined
+
+              stats = {
+                tokensPerSecond: tokensPerSecond
+                  ? Math.round(tokensPerSecond * 10) / 10
+                  : undefined,
+                promptTokensPerSecond: promptTokensPerSecond
+                  ? Math.round(promptTokensPerSecond * 10) / 10
+                  : undefined,
+                totalTokens: data.stats.eval_count,
+                promptTokens: data.stats.prompt_eval_count,
+                generationTime: data.stats.eval_duration
+                  ? data.stats.eval_duration / 1e9
+                  : undefined,
+                totalTime: data.stats.total_duration
+                  ? data.stats.total_duration / 1e9
+                  : undefined,
+              }
+              setCurrentStats(stats)
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
       }
-      setMessages([...newMessages, { role: "assistant", content }])
+
+      setMessages([...newMessages, { role: "assistant", content, stats }])
       setStreamingContent("")
+      setCurrentStats(undefined)
     } catch (err: unknown) {
       if (
         typeof err === "object" &&
@@ -137,6 +198,7 @@ export default function Home() {
           { role: "assistant", content: streamingContent },
         ])
         setStreamingContent("")
+        setCurrentStats(undefined)
       }
     }
   }
@@ -144,11 +206,18 @@ export default function Home() {
   const clearChat = () => {
     setMessages([])
     setStreamingContent("")
+    setCurrentStats(undefined)
   }
 
   const exportChat = () => {
     const text = messages
-      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+      .map((m) => {
+        let msgText = `${m.role.toUpperCase()}: ${m.content}`
+        if (m.stats) {
+          msgText += `\n[Stats: ${m.stats.totalTokens} tokens, ${m.stats.tokensPerSecond} tokens/sec]`
+        }
+        return msgText
+      })
       .join("\n\n")
     const blob = new Blob([text], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
@@ -251,11 +320,26 @@ export default function Home() {
                 role="assistant"
                 content={streamingContent}
                 model={selectedModel}
+                stats={currentStats}
               />
             )}
             <div ref={messagesEndRef} />
           </div>
           <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+            {/* Live Stats Display */}
+            {loading && currentStats && (
+              <div className="mb-3 flex gap-4 text-xs text-gray-600 dark:text-gray-400">
+                {currentStats.tokensPerSecond && (
+                  <span>⚡ {currentStats.tokensPerSecond} tokens/sec</span>
+                )}
+                {currentStats.totalTokens && (
+                  <span>📊 {currentStats.totalTokens} tokens generated</span>
+                )}
+                {currentStats.generationTime && (
+                  <span>⏱️ {currentStats.generationTime.toFixed(1)}s</span>
+                )}
+              </div>
+            )}
             <div className="flex gap-4">
               <input
                 type="text"

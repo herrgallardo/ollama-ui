@@ -11,12 +11,20 @@ interface MessageProps {
   role: "user" | "assistant" | "system"
   content: string
   model?: string
+  stats?: {
+    tokensPerSecond?: number
+    promptTokensPerSecond?: number
+    totalTokens?: number
+    promptTokens?: number
+    generationTime?: number
+    totalTime?: number
+  }
 }
 
 // Type assertion for the style to match SyntaxHighlighter's expected type
 const syntaxStyle = vscDarkPlus as { [key: string]: CSSProperties }
 
-export default function Message({ role, content, model }: MessageProps) {
+export default function Message({ role, content, model, stats }: MessageProps) {
   const components: Components = {
     code({ node, className, children, ...props }) {
       const inline = node?.position
@@ -78,6 +86,54 @@ export default function Message({ role, content, model }: MessageProps) {
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
               {content}
             </ReactMarkdown>
+          </div>
+        )}
+
+        {/* Display stats for assistant messages */}
+        {role === "assistant" && stats && (
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
+              {stats.tokensPerSecond !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-green-600 dark:text-green-400">⚡</span>
+                  <span>{stats.tokensPerSecond} tokens/sec</span>
+                </div>
+              )}
+              {stats.promptTokensPerSecond !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-blue-600 dark:text-blue-400">📥</span>
+                  <span>{stats.promptTokensPerSecond} prompt tokens/sec</span>
+                </div>
+              )}
+              {stats.totalTokens !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-purple-600 dark:text-purple-400">
+                    📊
+                  </span>
+                  <span>{stats.totalTokens} tokens</span>
+                </div>
+              )}
+              {stats.promptTokens !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-orange-600 dark:text-orange-400">
+                    📝
+                  </span>
+                  <span>{stats.promptTokens} prompt tokens</span>
+                </div>
+              )}
+              {stats.generationTime !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-cyan-600 dark:text-cyan-400">⏱️</span>
+                  <span>{stats.generationTime.toFixed(2)}s generation</span>
+                </div>
+              )}
+              {stats.totalTime !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-600 dark:text-gray-400">⏰</span>
+                  <span>{stats.totalTime.toFixed(2)}s total</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
