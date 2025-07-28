@@ -3,48 +3,29 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import Image from "next/image"
 import Message from "./components/Message"
-
-interface ChatMessage {
-  role: "user" | "assistant" | "system"
-  content: string
-  stats?: {
-    tokensPerSecond?: number
-    promptTokensPerSecond?: number
-    totalTokens?: number
-    promptTokens?: number
-    generationTime?: number
-    totalTime?: number
-  }
-}
-
-interface Model {
-  name: string
-  size: number
-  modified_at: string
-}
-
-const SYSTEM_PROMPTS = {
-  default: "",
-  coder:
-    "You are an expert programmer. Provide clear, concise code examples and explanations.",
-  teacher:
-    "You are a patient teacher. Explain concepts clearly with examples and analogies.",
-  creative:
-    "You are a creative writer. Be imaginative and engaging in your responses.",
-}
+import { useToast } from "./hooks/useToast"
+import { parseOllamaError, getErrorMessage } from "./utils/errorHandler"
+import type { ChatMessage, Model, SystemPromptKey } from "./types/chat"
+import {
+  SYSTEM_PROMPTS,
+  DEFAULT_MODEL,
+  CONNECTION_CHECK_INTERVAL,
+  CHAT_EXPORT_PREFIX,
+} from "./constants/prompts"
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [models, setModels] = useState<Model[]>([])
-  const [selectedModel, setSelectedModel] = useState("llama3.1:8b")
-  const [systemPrompt, setSystemPrompt] = useState("default")
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [systemPrompt, setSystemPrompt] = useState<SystemPromptKey>("default")
   const [isConnected, setIsConnected] = useState(true)
   const [streamingContent, setStreamingContent] = useState("")
   const [currentStats, setCurrentStats] = useState<ChatMessage["stats"]>()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const { addToast } = useToast()
 
   // Memoize sorted models
   const sortedModels = useMemo(
@@ -58,23 +39,51 @@ export default function Home() {
       try {
         const response = await fetch("/api/models")
         const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch models")
+        }
+
         if (data.models?.length) {
           setModels(data.models)
           setIsConnected(true)
+
+          // Show success toast only on reconnection
+          if (!isConnected) {
+            addToast({
+              message: "Connected to Ollama",
+              type: "success",
+              duration: 3000,
+            })
+          }
+
           if (!data.models.some((m: Model) => m.name === selectedModel)) {
             setSelectedModel(data.models[0].name)
           }
         } else {
           setIsConnected(false)
+          setModels([])
         }
-      } catch {
+      } catch (error) {
         setIsConnected(false)
+        setModels([])
+
+        // Only show error toast once
+        if (isConnected) {
+          const errorMessage = getErrorMessage(error)
+          addToast({
+            message: errorMessage,
+            type: "error",
+            duration: 7000,
+          })
+        }
       }
     }
+
     checkConnection()
-    const interval = setInterval(checkConnection, 10000)
+    const interval = setInterval(checkConnection, CONNECTION_CHECK_INTERVAL)
     return () => clearInterval(interval)
-  }, [selectedModel])
+  }, [selectedModel, isConnected, addToast])
 
   // Auto-scroll
   useEffect(() => {
@@ -83,6 +92,15 @@ export default function Home() {
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
+
+    if (!isConnected) {
+      addToast({
+        message: "Cannot send message: Ollama is not connected",
+        type: "error",
+      })
+      return
+    }
+
     const userMessage: ChatMessage = { role: "user", content: input }
     const newMessages = [...messages, userMessage]
     setMessages(newMessages)
@@ -99,21 +117,23 @@ export default function Home() {
         body: JSON.stringify({
           messages: newMessages,
           model: selectedModel,
-          systemPrompt:
-            SYSTEM_PROMPTS[systemPrompt as keyof typeof SYSTEM_PROMPTS],
+          systemPrompt: SYSTEM_PROMPTS[systemPrompt],
         }),
         signal: abortControllerRef.current.signal,
       })
 
-      if (!res.ok) throw new Error("Failed to get response")
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to get response")
+      }
 
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       let content = ""
       let stats: ChatMessage["stats"] = {}
 
-      while (true) {
-        const { done, value } = await reader!.read()
+      while (reader) {
+        const { done, value } = await reader.read()
         if (done) break
 
         const chunk = decoder.decode(value)
@@ -163,24 +183,41 @@ export default function Home() {
         }
       }
 
-      setMessages([...newMessages, { role: "assistant", content, stats }])
+      setMessages([
+        ...newMessages,
+        { role: "assistant", content, model: selectedModel, stats },
+      ])
       setStreamingContent("")
       setCurrentStats(undefined)
     } catch (err: unknown) {
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "name" in err &&
-        (err as { name: string }).name !== "AbortError"
-      ) {
+      if (err instanceof Error && err.name === "AbortError") {
+        // User cancelled - not an error
+        addToast({
+          message: "Generation cancelled",
+          type: "info",
+          duration: 3000,
+        })
+      } else {
+        const ollamaError = parseOllamaError(err)
+
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content:
-              "⚠️ Error: Failed to get response. Make sure Ollama is running locally.",
+            content: `⚠️ Error: ${ollamaError.message}`,
+            model: selectedModel,
           },
         ])
+
+        addToast({
+          message: ollamaError.message,
+          type: "error",
+          duration: 7000,
+        })
+
+        if (ollamaError.details) {
+          console.error("Error details:", ollamaError.details)
+        }
       }
     } finally {
       setLoading(false)
@@ -195,7 +232,11 @@ export default function Home() {
       if (streamingContent) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: streamingContent },
+          {
+            role: "assistant",
+            content: streamingContent,
+            model: selectedModel,
+          },
         ])
         setStreamingContent("")
         setCurrentStats(undefined)
@@ -207,25 +248,44 @@ export default function Home() {
     setMessages([])
     setStreamingContent("")
     setCurrentStats(undefined)
+    addToast({
+      message: "Chat cleared",
+      type: "success",
+      duration: 2000,
+    })
   }
 
   const exportChat = () => {
-    const text = messages
-      .map((m) => {
-        let msgText = `${m.role.toUpperCase()}: ${m.content}`
-        if (m.stats) {
-          msgText += `\n[Stats: ${m.stats.totalTokens} tokens, ${m.stats.tokensPerSecond} tokens/sec]`
-        }
-        return msgText
+    try {
+      const text = messages
+        .map((m) => {
+          let msgText = `${m.role.toUpperCase()}: ${m.content}`
+          if (m.stats) {
+            msgText += `\n[Stats: ${m.stats.totalTokens} tokens, ${m.stats.tokensPerSecond} tokens/sec]`
+          }
+          return msgText
+        })
+        .join("\n\n")
+
+      const blob = new Blob([text], { type: "text/plain" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${CHAT_EXPORT_PREFIX}-${new Date().toISOString()}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      addToast({
+        message: "Chat exported successfully",
+        type: "success",
+        duration: 3000,
       })
-      .join("\n\n")
-    const blob = new Blob([text], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `chat-${new Date().toISOString()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    } catch {
+      addToast({
+        message: "Failed to export chat",
+        type: "error",
+      })
+    }
   }
 
   return (
@@ -247,7 +307,7 @@ export default function Home() {
               </h1>
               <div className="flex items-center gap-2 mt-1">
                 <div
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-2 h-2 rounded-full transition-colors ${
                     isConnected ? "bg-green-500" : "bg-red-500"
                   }`}
                 />
@@ -263,7 +323,7 @@ export default function Home() {
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               disabled={!isConnected || !sortedModels.length}
-              className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sortedModels.map((model) => (
                 <option key={model.name} value={model.name}>
@@ -274,7 +334,9 @@ export default function Home() {
             {/* System Prompt */}
             <select
               value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
+              onChange={(e) =>
+                setSystemPrompt(e.target.value as SystemPromptKey)
+              }
               className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="default">Default</option>
@@ -285,7 +347,8 @@ export default function Home() {
             {/* Actions */}
             <button
               onClick={clearChat}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 transition-colors"
+              disabled={!messages.length}
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 disabled:opacity-50 transition-colors"
             >
               Clear
             </button>
@@ -313,7 +376,7 @@ export default function Home() {
               </div>
             )}
             {messages.map((msg, idx) => (
-              <Message key={idx} {...msg} model={selectedModel} />
+              <Message key={idx} {...msg} />
             ))}
             {streamingContent && (
               <Message
@@ -345,7 +408,7 @@ export default function Home() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) =>
+                onKeyDown={(e) =>
                   e.key === "Enter" && !e.shiftKey && !loading && sendMessage()
                 }
                 placeholder={
@@ -354,7 +417,7 @@ export default function Home() {
                     : "Ollama is not connected..."
                 }
                 disabled={loading || !isConnected}
-                className="flex-1 px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="flex-1 px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               {loading ? (
                 <button
@@ -367,7 +430,7 @@ export default function Home() {
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || !isConnected}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Send
                 </button>
