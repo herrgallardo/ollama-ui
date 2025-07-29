@@ -1,10 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import Image from "next/image"
 import Message from "./components/Message"
+import KeyboardShortcuts from "./components/KeyboardShortcuts"
 import { useToast } from "./hooks/useToast"
-import { parseOllamaError, getErrorMessage } from "./utils/errorHandler"
+import {
+  useKeyboardShortcuts,
+  type ShortcutConfig,
+} from "./hooks/useKeyboardShortcuts"
+import { parseOllamaError } from "./utils/errorHandler"
 import { ChatStorage } from "./utils/chatStorage"
 import type { ChatMessage, Model, SystemPromptKey } from "./types/chat"
 import {
@@ -24,8 +29,12 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState(true)
   const [streamingContent, setStreamingContent] = useState("")
   const [currentStats, setCurrentStats] = useState<ChatMessage["stats"]>()
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const modelSelectRef = useRef<HTMLSelectElement>(null)
+  const promptSelectRef = useRef<HTMLSelectElement>(null)
   const { addToast } = useToast()
   const hasShownDisconnectToast = useRef(false)
 
@@ -34,6 +43,162 @@ export default function Home() {
     () => [...models].sort((a, b) => a.name.localeCompare(b.name)),
     [models]
   )
+
+  // Define functions with useCallback to avoid recreating them
+  const clearChat = useCallback(() => {
+    setMessages([])
+    setStreamingContent("")
+    setCurrentStats(undefined)
+    ChatStorage.clear()
+    addToast({
+      message: "Chat cleared",
+      type: "success",
+      duration: 2000,
+    })
+  }, [addToast])
+
+  const exportChat = useCallback(() => {
+    try {
+      const text = messages
+        .map((m) => {
+          let msgText = `${m.role.toUpperCase()}: ${m.content}`
+          if (m.stats) {
+            msgText += `\n[Stats: ${m.stats.totalTokens} tokens, ${m.stats.tokensPerSecond} tokens/sec]`
+          }
+          return msgText
+        })
+        .join("\n\n")
+
+      const blob = new Blob([text], { type: "text/plain" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${CHAT_EXPORT_PREFIX}-${new Date().toISOString()}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      addToast({
+        message: "Chat exported successfully",
+        type: "success",
+        duration: 3000,
+      })
+    } catch {
+      addToast({
+        message: "Failed to export chat",
+        type: "error",
+      })
+    }
+  }, [messages, addToast])
+
+  const cancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      setLoading(false)
+      if (streamingContent) {
+        const completeMessages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: streamingContent,
+            model: selectedModel,
+          },
+        ] as ChatMessage[]
+
+        setMessages(completeMessages)
+        setStreamingContent("")
+        setCurrentStats(undefined)
+
+        // Save cancelled message
+        ChatStorage.save(completeMessages, selectedModel)
+      }
+    }
+  }, [messages, streamingContent, selectedModel])
+
+  // Define keyboard shortcuts
+  const shortcuts: ShortcutConfig[] = useMemo(
+    () => [
+      {
+        key: "k",
+        ctrl: true,
+        description: "Clear chat",
+        handler: () => {
+          if (messages.length > 0) {
+            clearChat()
+          }
+        },
+        enabled: messages.length > 0,
+      },
+      {
+        key: "e",
+        ctrl: true,
+        description: "Export chat",
+        handler: () => {
+          if (messages.length > 0) {
+            exportChat()
+          }
+        },
+        enabled: messages.length > 0,
+      },
+      {
+        key: "h",
+        ctrl: true,
+        description: "Show keyboard shortcuts",
+        handler: () => setShowShortcuts(true),
+      },
+      {
+        key: "?",
+        ctrl: true,
+        description: "Show keyboard shortcuts",
+        handler: () => setShowShortcuts(true),
+      },
+      {
+        key: "F1",
+        description: "Show keyboard shortcuts",
+        handler: () => setShowShortcuts(true),
+      },
+      {
+        key: "l",
+        ctrl: true,
+        description: "Focus message input",
+        handler: () => inputRef.current?.focus(),
+      },
+      {
+        key: "m",
+        ctrl: true,
+        description: "Open model selector",
+        handler: () => modelSelectRef.current?.focus(),
+        enabled: isConnected && sortedModels.length > 0,
+      },
+      {
+        key: "p",
+        ctrl: true,
+        description: "Open prompt selector",
+        handler: () => promptSelectRef.current?.focus(),
+      },
+      {
+        key: "Escape",
+        description: "Cancel generation",
+        handler: () => {
+          if (loading) {
+            cancelGeneration()
+          }
+        },
+        enabled: loading,
+      },
+    ],
+    [
+      messages.length,
+      loading,
+      isConnected,
+      sortedModels.length,
+      clearChat,
+      exportChat,
+      cancelGeneration,
+    ]
+  )
+
+  // Use keyboard shortcuts
+  useKeyboardShortcuts({ shortcuts })
 
   // Load chat history on mount
   useEffect(() => {
@@ -49,6 +214,7 @@ export default function Home() {
         duration: 3000,
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run on mount, not dependent on addToast
 
   // Save before unload
@@ -328,75 +494,6 @@ export default function Home() {
     }
   }
 
-  const cancelGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      setLoading(false)
-      if (streamingContent) {
-        const completeMessages = [
-          ...messages,
-          {
-            role: "assistant",
-            content: streamingContent,
-            model: selectedModel,
-          },
-        ] as ChatMessage[]
-
-        setMessages(completeMessages)
-        setStreamingContent("")
-        setCurrentStats(undefined)
-
-        // Save cancelled message
-        ChatStorage.save(completeMessages, selectedModel)
-      }
-    }
-  }
-
-  const clearChat = () => {
-    setMessages([])
-    setStreamingContent("")
-    setCurrentStats(undefined)
-    ChatStorage.clear()
-    addToast({
-      message: "Chat cleared",
-      type: "success",
-      duration: 2000,
-    })
-  }
-
-  const exportChat = () => {
-    try {
-      const text = messages
-        .map((m) => {
-          let msgText = `${m.role.toUpperCase()}: ${m.content}`
-          if (m.stats) {
-            msgText += `\n[Stats: ${m.stats.totalTokens} tokens, ${m.stats.tokensPerSecond} tokens/sec]`
-          }
-          return msgText
-        })
-        .join("\n\n")
-
-      const blob = new Blob([text], { type: "text/plain" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${CHAT_EXPORT_PREFIX}-${new Date().toISOString()}.txt`
-      a.click()
-      URL.revokeObjectURL(url)
-
-      addToast({
-        message: "Chat exported successfully",
-        type: "success",
-        duration: 3000,
-      })
-    } catch {
-      addToast({
-        message: "Failed to export chat",
-        type: "error",
-      })
-    }
-  }
-
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -429,10 +526,12 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {/* Model Selection */}
             <select
+              ref={modelSelectRef}
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               disabled={!isConnected || !sortedModels.length}
-              className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              title="Press Ctrl+M to focus"
             >
               {sortedModels.map((model) => (
                 <option key={model.name} value={model.name}>
@@ -442,11 +541,13 @@ export default function Home() {
             </select>
             {/* System Prompt */}
             <select
+              ref={promptSelectRef}
               value={systemPrompt}
               onChange={(e) =>
                 setSystemPrompt(e.target.value as SystemPromptKey)
               }
-              className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              title="Press Ctrl+P to focus"
             >
               <option value="default">Default</option>
               <option value="coder">Coder</option>
@@ -457,16 +558,43 @@ export default function Home() {
             <button
               onClick={clearChat}
               disabled={!messages.length}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 disabled:opacity-50 transition-colors"
+              className="group px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
+              title="Ctrl+K"
             >
               Clear
+              <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-500 shadow-sm whitespace-nowrap group-hover:bg-gray-300 dark:group-hover:bg-gray-500 transition-all">
+                ⌘K
+              </kbd>
             </button>
             <button
               onClick={exportChat}
               disabled={!messages.length}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 disabled:opacity-50 transition-colors"
+              className="group px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
+              title="Ctrl+E"
             >
               Export
+              <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-500 shadow-sm whitespace-nowrap group-hover:bg-gray-300 dark:group-hover:bg-gray-500 transition-all">
+                ⌘E
+              </kbd>
+            </button>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
+              title="Keyboard shortcuts (Ctrl+H)"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -481,6 +609,13 @@ export default function Home() {
                 <p className="text-xl mb-2">Welcome to Local AI Chat</p>
                 <p className="text-sm">
                   Start a conversation with {selectedModel}
+                </p>
+                <p className="text-xs mt-4">
+                  Press{" "}
+                  <kbd className="px-2 py-1 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 shadow-sm whitespace-nowrap transition-all">
+                    Ctrl+H
+                  </kbd>{" "}
+                  to see keyboard shortcuts
                 </p>
               </div>
             )}
@@ -514,6 +649,7 @@ export default function Home() {
             )}
             <div className="flex gap-4">
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -526,20 +662,25 @@ export default function Home() {
                     : "Ollama is not connected..."
                 }
                 disabled={loading || !isConnected}
-                className="flex-1 px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               />
               {loading ? (
                 <button
                   onClick={cancelGeneration}
-                  className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  className="group px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 active:bg-red-700 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex items-center gap-2"
+                  title="Press Escape to cancel"
                 >
                   Stop
+                  <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-red-600/50 text-white rounded border border-red-400/50 shadow-sm whitespace-nowrap group-hover:bg-red-700/50 transition-all">
+                    Esc
+                  </kbd>
                 </button>
               ) : (
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || !isConnected}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                  title="Press Enter to send"
                 >
                   Send
                 </button>
@@ -548,6 +689,13 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcuts
+        isOpen={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        shortcuts={shortcuts}
+      />
     </main>
   )
 }
