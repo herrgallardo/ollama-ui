@@ -5,6 +5,7 @@ import Image from "next/image"
 import Message from "./components/Message"
 import { useToast } from "./hooks/useToast"
 import { parseOllamaError, getErrorMessage } from "./utils/errorHandler"
+import { ChatStorage } from "./utils/chatStorage"
 import type { ChatMessage, Model, SystemPromptKey } from "./types/chat"
 import {
   SYSTEM_PROMPTS,
@@ -26,6 +27,7 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const { addToast } = useToast()
+  const hasShownDisconnectToast = useRef(false)
 
   // Memoize sorted models
   const sortedModels = useMemo(
@@ -33,22 +35,68 @@ export default function Home() {
     [models]
   )
 
+  // Load chat history on mount
+  useEffect(() => {
+    const stored = ChatStorage.load()
+    if (stored && stored.messages.length > 0) {
+      setMessages(stored.messages)
+      if (stored.model) {
+        setSelectedModel(stored.model)
+      }
+      addToast({
+        message: `Restored ${stored.messages.length} messages`,
+        type: "info",
+        duration: 3000,
+      })
+    }
+  }, []) // Only run on mount, not dependent on addToast
+
+  // Save before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (messages.length > 0) {
+        ChatStorage.save(messages, selectedModel)
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [messages, selectedModel])
+
   // Fetch models and connection status
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const response = await fetch("/api/models")
-        const data = await response.json()
+        const response = await fetch("/api/models", {
+          method: "GET",
+          signal: AbortSignal.timeout(5000), // 5 second timeout
+        })
 
         if (!response.ok) {
-          throw new Error("Failed to fetch models")
+          // Server responded with error
+          setIsConnected(false)
+          setModels([])
+
+          if (!hasShownDisconnectToast.current) {
+            hasShownDisconnectToast.current = true
+            addToast({
+              message:
+                "Ollama server error. Please check if Ollama is running properly.",
+              type: "error",
+              duration: 5000,
+            })
+          }
+          return
         }
+
+        const data = await response.json()
 
         if (data.models?.length) {
           setModels(data.models)
           setIsConnected(true)
+          hasShownDisconnectToast.current = false
 
-          // Show success toast only on reconnection
+          // Show success toast only on reconnection after being disconnected
           if (!isConnected) {
             addToast({
               message: "Connected to Ollama",
@@ -57,31 +105,64 @@ export default function Home() {
             })
           }
 
+          // Check if selected model is still available
           if (!data.models.some((m: Model) => m.name === selectedModel)) {
-            setSelectedModel(data.models[0].name)
+            const firstModel = data.models[0].name
+            setSelectedModel(firstModel)
+            addToast({
+              message: `Model ${selectedModel} not found, switched to ${firstModel}`,
+              type: "warning",
+              duration: 4000,
+            })
           }
         } else {
+          // No models available
           setIsConnected(false)
           setModels([])
+
+          if (!hasShownDisconnectToast.current) {
+            hasShownDisconnectToast.current = true
+            addToast({
+              message:
+                "No models found. Please pull a model using 'ollama pull <model>'",
+              type: "warning",
+              duration: 5000,
+            })
+          }
         }
       } catch (error) {
+        // Network error or timeout - Ollama not reachable
         setIsConnected(false)
         setModels([])
 
-        // Only show error toast once
-        if (isConnected) {
-          const errorMessage = getErrorMessage(error)
-          addToast({
-            message: errorMessage,
-            type: "error",
-            duration: 7000,
-          })
+        // Only show toast once per disconnect
+        if (!hasShownDisconnectToast.current) {
+          hasShownDisconnectToast.current = true
+
+          if (error instanceof Error && error.name === "AbortError") {
+            addToast({
+              message: "Connection timeout. Please check if Ollama is running.",
+              type: "error",
+              duration: 5000,
+            })
+          } else {
+            addToast({
+              message:
+                "Cannot connect to Ollama. Please run 'ollama serve' to start it.",
+              type: "error",
+              duration: 5000,
+            })
+          }
         }
       }
     }
 
+    // Check immediately
     checkConnection()
+
+    // Then check periodically
     const interval = setInterval(checkConnection, CONNECTION_CHECK_INTERVAL)
+
     return () => clearInterval(interval)
   }, [selectedModel, isConnected, addToast])
 
@@ -183,12 +264,34 @@ export default function Home() {
         }
       }
 
-      setMessages([
+      const completeMessages = [
         ...newMessages,
         { role: "assistant", content, model: selectedModel, stats },
-      ])
+      ] as ChatMessage[]
+
+      setMessages(completeMessages)
       setStreamingContent("")
       setCurrentStats(undefined)
+
+      // Save after complete response
+      const saved = ChatStorage.save(completeMessages, selectedModel)
+      if (!saved) {
+        addToast({
+          message: "Warning: Chat history could not be saved",
+          type: "warning",
+          duration: 4000,
+        })
+      }
+
+      // Check if nearing storage limit
+      if (ChatStorage.isNearLimit()) {
+        addToast({
+          message:
+            "Chat history is getting large. Consider exporting and clearing old messages.",
+          type: "warning",
+          duration: 6000,
+        })
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
         // User cancelled - not an error
@@ -230,16 +333,21 @@ export default function Home() {
       abortControllerRef.current.abort()
       setLoading(false)
       if (streamingContent) {
-        setMessages((prev) => [
-          ...prev,
+        const completeMessages = [
+          ...messages,
           {
             role: "assistant",
             content: streamingContent,
             model: selectedModel,
           },
-        ])
+        ] as ChatMessage[]
+
+        setMessages(completeMessages)
         setStreamingContent("")
         setCurrentStats(undefined)
+
+        // Save cancelled message
+        ChatStorage.save(completeMessages, selectedModel)
       }
     }
   }
@@ -248,6 +356,7 @@ export default function Home() {
     setMessages([])
     setStreamingContent("")
     setCurrentStats(undefined)
+    ChatStorage.clear()
     addToast({
       message: "Chat cleared",
       type: "success",
