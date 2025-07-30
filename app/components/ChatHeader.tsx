@@ -2,6 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useRef } from "react"
 import Image from "next/image"
+import ServiceManager from "./ServiceManager"
 import type { Model, SystemPromptKey, ChatMessage } from "@/app/types/chat"
 
 interface ChatHeaderProps {
@@ -77,6 +78,8 @@ const ChatHeader = forwardRef<ChatHeaderRefs, ChatHeaderProps>(
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {isConnected ? "Connected to Ollama" : "Ollama not connected"}
                 </p>
+                {/* Service Manager Integration */}
+                <ServiceManager isConnected={isConnected} />
               </div>
             </div>
           </div>
