@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import Message from "./components/Message"
 import ChatHeader, { type ChatHeaderRefs } from "./components/ChatHeader"
+import ChatInput, { type ChatInputRefs } from "./components/ChatInput"
 import KeyboardShortcuts from "./components/KeyboardShortcuts"
 import { useToast } from "./hooks/useToast"
 import {
@@ -32,7 +33,7 @@ export default function Home() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const chatInputRef = useRef<ChatInputRefs>(null)
   const headerRef = useRef<ChatHeaderRefs>(null)
   const { addToast } = useToast()
   const hasShownDisconnectToast = useRef(false)
@@ -159,7 +160,7 @@ export default function Home() {
         key: "l",
         ctrl: true,
         description: "Focus message input",
-        handler: () => inputRef.current?.focus(),
+        handler: () => chatInputRef.current?.inputRef.current?.focus(),
       },
       {
         key: "m",
@@ -542,61 +543,18 @@ export default function Home() {
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-            {/* Live Stats Display */}
-            {loading && currentStats && (
-              <div className="mb-3 flex gap-4 text-xs text-gray-600 dark:text-gray-400">
-                {currentStats.tokensPerSecond && (
-                  <span>⚡ {currentStats.tokensPerSecond} tokens/sec</span>
-                )}
-                {currentStats.totalTokens && (
-                  <span>📊 {currentStats.totalTokens} tokens generated</span>
-                )}
-                {currentStats.generationTime && (
-                  <span>⏱️ {currentStats.generationTime.toFixed(1)}s</span>
-                )}
-              </div>
-            )}
-            <div className="flex gap-4">
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && !e.shiftKey && !loading && sendMessage()
-                }
-                placeholder={
-                  isConnected
-                    ? "Type your message..."
-                    : "Ollama is not connected..."
-                }
-                disabled={loading || !isConnected}
-                className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              />
-              {loading ? (
-                <button
-                  onClick={cancelGeneration}
-                  className="group px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 active:bg-red-700 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex items-center gap-2"
-                  title="Press Escape to cancel"
-                >
-                  Stop
-                  <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-red-600/50 text-white rounded border border-red-400/50 shadow-sm whitespace-nowrap group-hover:bg-red-700/50 transition-all">
-                    Esc
-                  </kbd>
-                </button>
-              ) : (
-                <button
-                  onClick={sendMessage}
-                  disabled={!input.trim() || !isConnected}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                  title="Press Enter to send"
-                >
-                  Send
-                </button>
-              )}
-            </div>
-          </div>
+
+          {/* Chat Input */}
+          <ChatInput
+            ref={chatInputRef}
+            input={input}
+            onInputChange={setInput}
+            loading={loading}
+            onSend={sendMessage}
+            onCancel={cancelGeneration}
+            isConnected={isConnected}
+            currentStats={currentStats}
+          />
         </div>
       </div>
 
