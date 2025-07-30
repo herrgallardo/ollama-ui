@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import Message from "./components/Message"
 import ChatHeader, { type ChatHeaderRefs } from "./components/ChatHeader"
+import ChatContainer, {
+  type ChatContainerRefs,
+} from "./components/ChatContainer"
 import ChatInput, { type ChatInputRefs } from "./components/ChatInput"
 import KeyboardShortcuts from "./components/KeyboardShortcuts"
 import { useToast } from "./hooks/useToast"
@@ -31,8 +33,8 @@ export default function Home() {
   const [streamingContent, setStreamingContent] = useState("")
   const [currentStats, setCurrentStats] = useState<ChatMessage["stats"]>()
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const chatContainerRef = useRef<ChatContainerRefs>(null)
   const chatInputRef = useRef<ChatInputRefs>(null)
   const headerRef = useRef<ChatHeaderRefs>(null)
   const { addToast } = useToast()
@@ -332,11 +334,6 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [selectedModel, isConnected, addToast])
 
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, streamingContent])
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
@@ -514,35 +511,14 @@ export default function Home() {
       {/* Chat Container */}
       <div className="flex-1 max-w-6xl w-full mx-auto p-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg h-[calc(100vh-200px)] flex flex-col">
-          <div className="overflow-y-auto p-6 flex-1">
-            {messages.length === 0 && !streamingContent && (
-              <div className="text-center text-gray-500 dark:text-gray-400 mt-20">
-                <p className="text-xl mb-2">Welcome to Local AI Chat</p>
-                <p className="text-sm">
-                  Start a conversation with {selectedModel}
-                </p>
-                <p className="text-xs mt-4">
-                  Press{" "}
-                  <kbd className="px-2 py-1 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 shadow-sm whitespace-nowrap transition-all">
-                    Ctrl+H
-                  </kbd>{" "}
-                  to see keyboard shortcuts
-                </p>
-              </div>
-            )}
-            {messages.map((msg, idx) => (
-              <Message key={idx} {...msg} />
-            ))}
-            {streamingContent && (
-              <Message
-                role="assistant"
-                content={streamingContent}
-                model={selectedModel}
-                stats={currentStats}
-              />
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+          {/* Messages Display */}
+          <ChatContainer
+            ref={chatContainerRef}
+            messages={messages}
+            streamingContent={streamingContent}
+            currentStats={currentStats}
+            selectedModel={selectedModel}
+          />
 
           {/* Chat Input */}
           <ChatInput
