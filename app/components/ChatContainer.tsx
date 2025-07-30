@@ -1,6 +1,13 @@
 "use client"
 
-import { forwardRef, useImperativeHandle, useRef, useEffect } from "react"
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useEffect,
+  memo,
+  useMemo,
+} from "react"
 import Message from "./Message"
 import type { ChatMessage, ChatStats } from "@/app/types/chat"
 
@@ -13,62 +20,225 @@ interface ChatContainerProps {
 
 export interface ChatContainerRefs {
   messagesEndRef: React.RefObject<HTMLDivElement | null>
+  scrollToBottom: () => void
+  scrollToTop: () => void
 }
 
 const ChatContainer = forwardRef<ChatContainerRefs, ChatContainerProps>(
   ({ messages, streamingContent, currentStats, selectedModel }, ref) => {
-    // Create internal ref
+    // Create internal refs
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
+    const isAutoScrolling = useRef(true)
+    const lastMessageCount = useRef(messages.length)
 
-    // Expose ref through imperative handle
+    // Scroll functions
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+      isAutoScrolling.current = true
+    }
+
+    const scrollToTop = () => {
+      containerRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+      isAutoScrolling.current = false
+    }
+
+    // Expose methods through imperative handle
     useImperativeHandle(ref, () => ({
       messagesEndRef,
+      scrollToBottom,
+      scrollToTop,
     }))
 
-    // Auto-scroll to bottom when messages or streaming content changes
-    useEffect(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-    }, [messages, streamingContent])
+    // Handle scroll behavior
+    const handleScroll = () => {
+      if (!containerRef.current) return
 
-    return (
-      <div className="overflow-y-auto p-6 flex-1">
-        {/* Empty State */}
-        {messages.length === 0 && !streamingContent && (
-          <div className="text-center text-gray-500 dark:text-gray-400 mt-20">
-            <p className="text-xl mb-2">Welcome to Local AI Chat</p>
-            <p className="text-sm">Start a conversation with {selectedModel}</p>
-            <p className="text-xs mt-4">
-              Press{" "}
-              <kbd className="px-2 py-1 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 shadow-sm whitespace-nowrap transition-all">
-                Ctrl+H
-              </kbd>{" "}
-              to see keyboard shortcuts
+      const { scrollTop, scrollHeight, clientHeight } = containerRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+
+      // Update auto-scroll state based on user's scroll position
+      isAutoScrolling.current = isNearBottom
+    }
+
+    // Auto-scroll when new messages arrive or streaming content updates
+    useEffect(() => {
+      if (!isAutoScrolling.current) return
+
+      // Only scroll if we have new messages or streaming content
+      const hasNewMessage = messages.length > lastMessageCount.current
+      const hasStreamingContent = streamingContent.length > 0
+
+      if (hasNewMessage || hasStreamingContent) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+      }
+
+      lastMessageCount.current = messages.length
+    }, [messages.length, streamingContent])
+
+    // Memoize the rendered messages to prevent unnecessary re-renders
+    const renderedMessages = useMemo(() => {
+      return messages.map((msg, idx) => (
+        <Message
+          key={`${idx}-${msg.role}-${msg.content.slice(0, 50)}`}
+          {...msg}
+          isLatest={idx === messages.length - 1}
+        />
+      ))
+    }, [messages])
+
+    // Memoize streaming message
+    const streamingMessage = useMemo(() => {
+      if (!streamingContent) return null
+
+      return (
+        <Message
+          role="assistant"
+          content={streamingContent}
+          model={selectedModel}
+          stats={currentStats}
+          isLatest={true}
+        />
+      )
+    }, [streamingContent, selectedModel, currentStats])
+
+    // Memoize empty state
+    const emptyState = useMemo(() => {
+      if (messages.length > 0 || streamingContent) return null
+
+      return (
+        <div className="text-center text-gray-500 dark:text-gray-400 mt-20 animate-fade-in-up">
+          <div className="mb-6">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center animate-pulse-slow">
+              <svg
+                className="w-8 h-8 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              Welcome to Local AI Chat
+            </h3>
+            <p className="text-sm mb-4">
+              Start a conversation with {selectedModel}
             </p>
           </div>
-        )}
 
-        {/* Messages */}
-        {messages.map((msg, idx) => (
-          <Message key={idx} {...msg} />
-        ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto mb-6">
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                💡 Quick tip
+              </p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">
+                Ask anything - I&apos;m here to help!
+              </p>
+            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                ⌨️ Shortcuts
+              </p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">
+                Press{" "}
+                <kbd className="px-1 py-0.5 text-xs bg-gray-300 dark:bg-gray-600 rounded">
+                  Ctrl+H
+                </kbd>{" "}
+                for help
+              </p>
+            </div>
+          </div>
 
-        {/* Streaming Content */}
-        {streamingContent && (
-          <Message
-            role="assistant"
-            content={streamingContent}
-            model={selectedModel}
-            stats={currentStats}
-          />
-        )}
+          <div className="space-y-2 text-xs text-gray-400 dark:text-gray-500">
+            <p>
+              Press{" "}
+              <kbd className="px-2 py-1 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 shadow-sm whitespace-nowrap transition-all">
+                Enter
+              </kbd>{" "}
+              to send messages
+            </p>
+            <p>
+              Press{" "}
+              <kbd className="px-2 py-1 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 shadow-sm whitespace-nowrap transition-all">
+                Ctrl+K
+              </kbd>{" "}
+              to clear chat
+            </p>
+          </div>
+        </div>
+      )
+    }, [messages.length, streamingContent, selectedModel])
 
-        {/* Auto-scroll anchor */}
-        <div ref={messagesEndRef} />
-      </div>
+    return (
+      <>
+        <div
+          ref={containerRef}
+          className="overflow-y-auto p-6 flex-1 scroll-smooth"
+          onScroll={handleScroll}
+        >
+          {emptyState}
+
+          {/* Messages */}
+          {renderedMessages}
+
+          {/* Streaming Content */}
+          {streamingMessage}
+
+          {/* Auto-scroll anchor */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Scroll to bottom button - shows when user scrolls up */}
+        {!isAutoScrolling.current &&
+          (messages.length > 5 || streamingContent) && (
+            <div className="absolute bottom-4 right-4 z-10">
+              <button
+                onClick={scrollToBottom}
+                className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 animate-bounce-subtle focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                title="Scroll to bottom"
+                aria-label="Scroll to bottom of messages"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
+      </>
     )
   }
 )
 
 ChatContainer.displayName = "ChatContainer"
 
-export default ChatContainer
+// Memoize the entire component to prevent unnecessary re-renders
+export default memo(ChatContainer, (prevProps, nextProps) => {
+  return (
+    prevProps.messages.length === nextProps.messages.length &&
+    prevProps.streamingContent === nextProps.streamingContent &&
+    prevProps.selectedModel === nextProps.selectedModel &&
+    JSON.stringify(prevProps.currentStats) ===
+      JSON.stringify(nextProps.currentStats) &&
+    // Check if last message changed (for streaming updates)
+    (prevProps.messages.length === 0 ||
+      nextProps.messages.length === 0 ||
+      prevProps.messages[prevProps.messages.length - 1]?.content ===
+        nextProps.messages[nextProps.messages.length - 1]?.content)
+  )
+})
