@@ -230,6 +230,18 @@ function MessageComponent({
     }
   }, [role, model])
 
+  // Get message bubble styles based on role
+  const getMessageStyles = () => {
+    switch (role) {
+      case "user":
+        return "bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg"
+      case "system":
+        return "bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-300 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700"
+      default: // assistant
+        return "bg-gray-100 hover:bg-gray-50 text-gray-800 shadow-sm hover:shadow-md dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200"
+    }
+  }
+
   // Animation classes for smooth entry
   const animationClass = isLatest ? "animate-fade-in-up" : ""
 
@@ -241,13 +253,7 @@ function MessageComponent({
     >
       <div className="relative">
         <div
-          className={`max-w-[80%] rounded-lg p-4 transition-all duration-200 ${
-            role === "user"
-              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg"
-              : role === "system"
-                ? "bg-yellow-100 text-yellow-900 border border-yellow-300 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-200 dark:border-yellow-700 dark:hover:bg-yellow-900/30"
-                : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-750 shadow-sm hover:shadow-md"
-          }`}
+          className={`max-w-[80%] rounded-lg p-4 transition-all duration-200 ${getMessageStyles()}`}
         >
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-semibold flex items-center gap-2">
