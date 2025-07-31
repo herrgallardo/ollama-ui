@@ -10,52 +10,156 @@ interface ServiceCommand {
   icon: string
 }
 
+interface PlatformCommands {
+  name: string
+  icon: string
+  commands: ServiceCommand[]
+  note?: string
+}
+
 interface ServiceManagerProps {
   isConnected: boolean
 }
 
 export default function ServiceManager({ isConnected }: ServiceManagerProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState<
+    "linux" | "macos" | "windows"
+  >("linux")
   const { addToast } = useToast()
 
-  const commands: ServiceCommand[] = [
-    {
-      label: "Start Ollama",
-      command: "sudo systemctl start ollama",
-      description: "Start the Ollama service",
-      icon: "▶️",
+  const platforms: Record<"linux" | "macos" | "windows", PlatformCommands> = {
+    linux: {
+      name: "Linux",
+      icon: "🐧",
+      commands: [
+        {
+          label: "Start Ollama",
+          command: "sudo systemctl start ollama",
+          description: "Start the Ollama service",
+          icon: "▶️",
+        },
+        {
+          label: "Stop Ollama",
+          command: "sudo systemctl stop ollama",
+          description: "Stop the Ollama service",
+          icon: "⏹️",
+        },
+        {
+          label: "Restart Ollama",
+          command: "sudo systemctl restart ollama",
+          description: "Restart the Ollama service",
+          icon: "🔄",
+        },
+        {
+          label: "Check Status",
+          command: "sudo systemctl status ollama",
+          description: "Check Ollama service status",
+          icon: "📊",
+        },
+        {
+          label: "Enable Auto-start",
+          command: "sudo systemctl enable ollama",
+          description: "Enable Ollama to start on boot",
+          icon: "🚀",
+        },
+        {
+          label: "View Logs",
+          command: "sudo journalctl -u ollama -f",
+          description: "View Ollama service logs",
+          icon: "📜",
+        },
+      ],
+      note: "For systemd-based Linux distributions (Ubuntu, Debian, Fedora, etc.)",
     },
-    {
-      label: "Stop Ollama",
-      command: "sudo systemctl stop ollama",
-      description: "Stop the Ollama service",
-      icon: "⏹️",
+    macos: {
+      name: "macOS",
+      icon: "🍎",
+      commands: [
+        {
+          label: "Start Ollama",
+          command: "brew services start ollama",
+          description: "Start Ollama via Homebrew",
+          icon: "▶️",
+        },
+        {
+          label: "Stop Ollama",
+          command: "brew services stop ollama",
+          description: "Stop Ollama via Homebrew",
+          icon: "⏹️",
+        },
+        {
+          label: "Restart Ollama",
+          command: "brew services restart ollama",
+          description: "Restart Ollama via Homebrew",
+          icon: "🔄",
+        },
+        {
+          label: "List Services",
+          command: "brew services list",
+          description: "List all Homebrew services",
+          icon: "📋",
+        },
+        {
+          label: "Start (Manual)",
+          command: "ollama serve",
+          description: "Start Ollama manually in terminal",
+          icon: "🖥️",
+        },
+        {
+          label: "Check Version",
+          command: "ollama --version",
+          description: "Check installed Ollama version",
+          icon: "ℹ️",
+        },
+      ],
+      note: "Requires Ollama installed via Homebrew. For manual install, use 'ollama serve'",
     },
-    {
-      label: "Restart Ollama",
-      command: "sudo systemctl restart ollama",
-      description: "Restart the Ollama service",
-      icon: "🔄",
+    windows: {
+      name: "Windows",
+      icon: "🪟",
+      commands: [
+        {
+          label: "Start Ollama",
+          command: "ollama serve",
+          description: "Start Ollama in terminal",
+          icon: "▶️",
+        },
+        {
+          label: "Start (Background)",
+          command:
+            "Start-Process ollama -ArgumentList 'serve' -WindowStyle Hidden",
+          description: "Start Ollama in background (PowerShell)",
+          icon: "🔲",
+        },
+        {
+          label: "Check if Running",
+          command: "Get-Process ollama -ErrorAction SilentlyContinue",
+          description: "Check if Ollama is running (PowerShell)",
+          icon: "🔍",
+        },
+        {
+          label: "Stop Ollama",
+          command: "Stop-Process -Name ollama -Force",
+          description: "Stop Ollama process (PowerShell)",
+          icon: "⏹️",
+        },
+        {
+          label: "List Models",
+          command: "ollama list",
+          description: "List installed models",
+          icon: "📋",
+        },
+        {
+          label: "Check Version",
+          command: "ollama --version",
+          description: "Check installed Ollama version",
+          icon: "ℹ️",
+        },
+      ],
+      note: "Run commands in Terminal, PowerShell, or Command Prompt",
     },
-    {
-      label: "Check Status",
-      command: "sudo systemctl status ollama",
-      description: "Check Ollama service status",
-      icon: "📊",
-    },
-    {
-      label: "Enable Auto-start",
-      command: "sudo systemctl enable ollama",
-      description: "Enable Ollama to start on boot",
-      icon: "🚀",
-    },
-    {
-      label: "Disable Auto-start",
-      command: "sudo systemctl disable ollama",
-      description: "Disable Ollama auto-start on boot",
-      icon: "🛑",
-    },
-  ]
+  }
 
   const handleCopyCommand = async (command: string, label: string) => {
     try {
@@ -95,14 +199,8 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
     }
   }
 
-  const getRecommendedCommand = () => {
-    if (!isConnected) {
-      return commands[0] // Start Ollama
-    }
-    return commands[2] // Restart Ollama
-  }
-
-  const recommendedCommand = getRecommendedCommand()
+  const currentPlatform = platforms[selectedPlatform]
+  const recommendedCommand = currentPlatform.commands[0] // Start command
 
   return (
     <div className="relative">
@@ -148,21 +246,41 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
           />
 
           {/* Dropdown */}
-          <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 overflow-hidden">
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Ollama Service Management
+                Ollama Service Commands
               </h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Copy commands to manage the Ollama service
               </p>
             </div>
 
-            {/* Quick Action */}
+            {/* Platform Tabs */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
+              {(Object.keys(platforms) as Array<keyof typeof platforms>).map(
+                (platform) => (
+                  <button
+                    key={platform}
+                    onClick={() => setSelectedPlatform(platform)}
+                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all focus:outline-none ${
+                      selectedPlatform === platform
+                        ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                        : "bg-gray-50 dark:bg-gray-750 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    <span className="mr-1.5">{platforms[platform].icon}</span>
+                    {platforms[platform].name}
+                  </button>
+                )
+              )}
+            </div>
+
+            {/* Quick Action for disconnected state */}
             {!isConnected && (
               <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-red-600 dark:text-red-400">⚠️</span>
                     <span className="text-sm font-medium text-red-900 dark:text-red-200">
@@ -177,7 +295,7 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
                       recommendedCommand.label
                     )
                   }
-                  className="mt-2 w-full flex items-center justify-between px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full flex items-center justify-between px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <div className="flex items-center gap-2">
                     <span>{recommendedCommand.icon}</span>
@@ -202,13 +320,13 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
               </div>
             )}
 
-            {/* All Commands */}
-            <div className="max-h-64 overflow-y-auto">
-              {commands.map((cmd, index) => (
+            {/* Commands List */}
+            <div className="max-h-80 overflow-y-auto">
+              {currentPlatform.commands.map((cmd, index) => (
                 <button
                   key={index}
                   onClick={() => handleCopyCommand(cmd.command, cmd.label)}
-                  className="w-full px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                  className="w-full px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 group"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -220,10 +338,13 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
                         <div className="text-xs text-gray-600 dark:text-gray-400">
                           {cmd.description}
                         </div>
+                        <code className="text-xs text-gray-500 dark:text-gray-500 font-mono mt-0.5 block group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
+                          {cmd.command}
+                        </code>
                       </div>
                     </div>
                     <svg
-                      className="w-4 h-4 text-gray-400 dark:text-gray-500"
+                      className="w-4 h-4 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -240,11 +361,16 @@ export default function ServiceManager({ isConnected }: ServiceManagerProps) {
               ))}
             </div>
 
-            {/* Footer */}
+            {/* Footer with platform-specific note */}
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                💡 <strong>Tip:</strong> Paste these commands in your terminal
-                to manage the Ollama service
+              {currentPlatform.note && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                  <strong>Note:</strong> {currentPlatform.note}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                💡 <strong>Tip:</strong> Click any command to copy it to your
+                clipboard
               </p>
             </div>
           </div>
