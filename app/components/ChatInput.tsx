@@ -1,6 +1,8 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useRef } from "react"
+import { PaperAirplaneIcon, StopIcon } from "@heroicons/react/24/solid"
+import { BoltIcon, ChartBarIcon, ClockIcon } from "@heroicons/react/24/outline"
 import type { ChatStats } from "@/app/types/chat"
 
 interface ChatInputProps {
@@ -52,13 +54,22 @@ const ChatInput = forwardRef<ChatInputRefs, ChatInputProps>(
         {loading && currentStats && (
           <div className="mb-3 flex gap-4 text-xs text-gray-600 dark:text-gray-400">
             {currentStats.tokensPerSecond && (
-              <span>⚡ {currentStats.tokensPerSecond} tokens/sec</span>
+              <span className="flex items-center gap-1">
+                <BoltIcon className="w-3 h-3" />
+                {currentStats.tokensPerSecond} tokens/sec
+              </span>
             )}
             {currentStats.totalTokens && (
-              <span>📊 {currentStats.totalTokens} tokens generated</span>
+              <span className="flex items-center gap-1">
+                <ChartBarIcon className="w-3 h-3" />
+                {currentStats.totalTokens} tokens generated
+              </span>
             )}
             {currentStats.generationTime && (
-              <span>⏱️ {currentStats.generationTime.toFixed(1)}s</span>
+              <span className="flex items-center gap-1">
+                <ClockIcon className="w-3 h-3" />
+                {currentStats.generationTime.toFixed(1)}s
+              </span>
             )}
           </div>
         )}
@@ -85,6 +96,7 @@ const ChatInput = forwardRef<ChatInputRefs, ChatInputProps>(
               className="group px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 active:bg-red-700 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex items-center gap-2"
               title="Press Escape to cancel"
             >
+              <StopIcon className="w-4 h-4" />
               Stop
               <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-red-600/50 text-white rounded border border-red-400/50 shadow-sm whitespace-nowrap group-hover:bg-red-700/50 transition-all">
                 Esc
@@ -94,9 +106,10 @@ const ChatInput = forwardRef<ChatInputRefs, ChatInputProps>(
             <button
               onClick={onSend}
               disabled={!canSend}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex items-center gap-2"
               title="Press Enter to send"
             >
+              <PaperAirplaneIcon className="w-4 h-4" />
               Send
             </button>
           )}

@@ -2,6 +2,11 @@
 
 import { forwardRef, useImperativeHandle, useRef } from "react"
 import Image from "next/image"
+import {
+  TrashIcon,
+  ArrowDownTrayIcon,
+  RectangleStackIcon,
+} from "@heroicons/react/24/outline"
 import ServiceManager from "./ServiceManager"
 import type { Model, SystemPromptKey, ChatMessage } from "@/app/types/chat"
 
@@ -124,7 +129,8 @@ const ChatHeader = forwardRef<ChatHeaderRefs, ChatHeaderProps>(
               className="group px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
               title="Ctrl+K"
             >
-              Clear
+              <TrashIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Clear</span>
               <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-500 shadow-sm whitespace-nowrap group-hover:bg-gray-300 dark:group-hover:bg-gray-500 transition-all">
                 ⌘K
               </kbd>
@@ -136,7 +142,8 @@ const ChatHeader = forwardRef<ChatHeaderRefs, ChatHeaderProps>(
               className="group px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
               title="Ctrl+E"
             >
-              Export
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Export</span>
               <kbd className="hidden sm:inline px-2 py-0.5 text-xs font-mono font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-500 shadow-sm whitespace-nowrap group-hover:bg-gray-300 dark:group-hover:bg-gray-500 transition-all">
                 ⌘E
               </kbd>
@@ -147,19 +154,7 @@ const ChatHeader = forwardRef<ChatHeaderRefs, ChatHeaderProps>(
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
               title="Keyboard shortcuts (Ctrl+H)"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                />
-              </svg>
+              <RectangleStackIcon className="w-5 h-5" />
             </button>
           </div>
         </div>

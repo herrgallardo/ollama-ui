@@ -5,6 +5,18 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import {
+  ClipboardDocumentIcon,
+  ArrowTopRightOnSquareIcon,
+} from "@heroicons/react/24/outline"
+import {
+  BoltIcon,
+  ChartBarIcon,
+  DocumentTextIcon,
+  ClockIcon,
+  ServerIcon,
+  CircleStackIcon,
+} from "@heroicons/react/24/solid"
 import type { Components } from "react-markdown"
 import type { CSSProperties } from "react"
 import type { ChatMessage } from "@/app/types/chat"
@@ -115,19 +127,7 @@ function MessageComponent({
               className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded opacity-0 group-hover:opacity-100 transition-all duration-200 text-xs"
               title="Copy code"
             >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
+              <ClipboardDocumentIcon className="w-3 h-3" />
             </button>
           </div>
         ) : (
@@ -146,23 +146,11 @@ function MessageComponent({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors inline-flex items-center gap-1"
             {...props}
           >
             {children}
-            <svg
-              className="inline w-3 h-3 ml-1"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-              />
-            </svg>
+            <ArrowTopRightOnSquareIcon className="w-3 h-3" />
           </a>
         )
       },
@@ -179,37 +167,37 @@ function MessageComponent({
         <div className="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
           {stats.tokensPerSecond !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-green-600 dark:text-green-400">⚡</span>
+              <BoltIcon className="w-3 h-3 text-green-600 dark:text-green-400" />
               <span>{stats.tokensPerSecond} tokens/sec</span>
             </div>
           )}
           {stats.promptTokensPerSecond !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-blue-600 dark:text-blue-400">📥</span>
+              <ServerIcon className="w-3 h-3 text-blue-600 dark:text-blue-400" />
               <span>{stats.promptTokensPerSecond} prompt tokens/sec</span>
             </div>
           )}
           {stats.totalTokens !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-purple-600 dark:text-purple-400">📊</span>
+              <ChartBarIcon className="w-3 h-3 text-purple-600 dark:text-purple-400" />
               <span>{stats.totalTokens} tokens</span>
             </div>
           )}
           {stats.promptTokens !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-orange-600 dark:text-orange-400">📝</span>
+              <DocumentTextIcon className="w-3 h-3 text-orange-600 dark:text-orange-400" />
               <span>{stats.promptTokens} prompt tokens</span>
             </div>
           )}
           {stats.generationTime !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-cyan-600 dark:text-cyan-400">⏱️</span>
+              <ClockIcon className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
               <span>{stats.generationTime.toFixed(2)}s generation</span>
             </div>
           )}
           {stats.totalTime !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="text-gray-600 dark:text-gray-400">⏰</span>
+              <CircleStackIcon className="w-3 h-3 text-gray-600 dark:text-gray-400" />
               <span>{stats.totalTime.toFixed(2)}s total</span>
             </div>
           )}
@@ -295,39 +283,9 @@ function MessageComponent({
           title="Copy message"
         >
           {isCopying ? (
-            <svg
-              className="w-4 h-4 animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
+            <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin" />
           ) : (
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
+            <ClipboardDocumentIcon className="w-4 h-4" />
           )}
         </button>
       </div>

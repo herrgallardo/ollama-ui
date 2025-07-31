@@ -8,6 +8,12 @@ import {
   memo,
   useMemo,
 } from "react"
+import { ArrowDownIcon } from "@heroicons/react/24/solid"
+import {
+  ChatBubbleLeftRightIcon,
+  LightBulbIcon,
+  CommandLineIcon,
+} from "@heroicons/react/24/outline"
 import Message from "./Message"
 import type { ChatMessage, ChatStats } from "@/app/types/chat"
 
@@ -110,19 +116,7 @@ const ChatContainer = forwardRef<ChatContainerRefs, ChatContainerProps>(
         <div className="text-center text-gray-500 dark:text-gray-400 mt-20 animate-fade-in-up">
           <div className="mb-6">
             <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center animate-pulse-slow">
-              <svg
-                className="w-8 h-8 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
+              <ChatBubbleLeftRightIcon className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-xl font-semibold mb-2">
               Welcome to Local AI Chat
@@ -134,17 +128,19 @@ const ChatContainer = forwardRef<ChatContainerRefs, ChatContainerProps>(
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto mb-6">
             <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                💡 Quick tip
-              </p>
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                <LightBulbIcon className="w-4 h-4" />
+                Quick tip
+              </div>
               <p className="text-sm text-gray-800 dark:text-gray-200">
                 Ask anything - I&apos;m here to help!
               </p>
             </div>
             <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                ⌨️ Shortcuts
-              </p>
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                <CommandLineIcon className="w-4 h-4" />
+                Shortcuts
+              </div>
               <p className="text-sm text-gray-800 dark:text-gray-200">
                 Press{" "}
                 <kbd className="px-1 py-0.5 text-xs bg-gray-300 dark:bg-gray-600 rounded">
@@ -204,19 +200,7 @@ const ChatContainer = forwardRef<ChatContainerRefs, ChatContainerProps>(
                 title="Scroll to bottom"
                 aria-label="Scroll to bottom of messages"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                  />
-                </svg>
+                <ArrowDownIcon className="w-5 h-5" />
               </button>
             </div>
           )}
